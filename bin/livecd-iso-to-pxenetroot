@@ -1,0 +1,288 @@
+#!/bin/bash
+# Convert a live CD iso so that it can be booted over the network
+# using PXELINUX.
+# Copyright 2008 Red Hat, Inc.
+# Written by Richard W.M. Jones <rjones@redhat.com>
+# Based on a script by Jeremy Katz <katzj@redhat.com>
+# Based on original work by Chris Lalancette <clalance@redhat.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Library General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+export PATH=/sbin:/usr/sbin:$PATH
+
+usage() {
+    echo "Usage: livecd-iso-to-pxenetroot <isopath>"
+    exit 1
+}
+
+cleanup() {
+    [ -d "$ROOTFSMNT" ] && umount $ROOTFSMNT && rmdir $ROOTFSMNT
+    [ -d "$LIVEFSMNT" ] && umount $LIVEFSMNT && rmdir $LIVEFSMNT
+    [ -d "$ISOFSMNT" ] && umount $ISOFSMNT && rmdir $ISOFSMNT
+}
+
+cleanup_error() {
+    echo "Cleaning up to exit..."
+    cleanup
+    exit 1
+}
+
+get_ext_uuid() {
+    dumpe2fs $1 | grep 'Filesystem UUID:' | sed -e 's/Filesystem UUID: *//'
+}
+
+update_nbdconf() {
+
+    # create nbd config file if required
+    if [ ! -f "$ROOTIMAGES/nbd.conf" ]; then
+	cat > $ROOTIMAGES/nbd.conf <<EOF
+[generic]
+  # The [generic] section is required, even if nothing is specified
+  # there.
+  # When either of these options are specified, nbd-server drops
+  # privileges to the given user and group after opening ports, but
+  # _before_ opening files.
+  # user = nbd
+  # group = nbd
+EOF
+    fi
+    # add entry for current image if not present
+    if ! grep -q "\[$LABEL\]" $ROOTIMAGES/nbd.conf; then
+       cat >> $ROOTIMAGES/nbd.conf <<EOF
+[$LABEL]
+  exportname = $ROOTIMAGES/liveos_$LABEL.img
+  readonly = true
+  multifile = false
+  copyonwrite = false
+EOF
+    fi
+
+}
+
+
+create_netroot() {
+
+    if [ -z "$LABEL" ]; then
+	LABEL=`isoinfo -d -i $ISO|grep 'Volume id: '|sed -e 's/^.*: //' -e 's/ /_/g'`
+	echo "Label for this system automatically generated from iso image"
+	echo "LABEL=$LABEL"
+    fi
+    # here we should check whether $LABEL now is set
+    if [ -z "$LABEL" ]; then
+	echo "Image label not set and not found in the iso image"
+	cleanup_error
+    fi
+
+    # Mount the ISO
+    ISOFSMNT=$(mktemp -d /var/tmp/$(basename $0)-mount.XXXXXX)
+    mount -o loop "$ISO" $ISOFSMNT || cleanup_error
+
+    trap cleanup_error SIGINT SIGTERM
+    trap cleanup EXIT
+
+    VMLINUZ=
+    INITRD=
+    SQUASHFS=
+
+    [ -f "$ISOFSMNT/isolinux/initrd0.img" ] && INITRD=$ISOFSMNT/isolinux/initrd0.img
+    [ -f "$ISOFSMNT/isolinux/initrd.img" ] && INITRD=$ISOFSMNT/isolinux/initrd.img
+    [ -f "$ISOFSMNT/isolinux/vmlinuz0" ] && VMLINUZ=$ISOFSMNT/isolinux/vmlinuz0
+    [ -f "$ISOFSMNT/isolinux/vmlinuz" ] && VMLINUZ=$ISOFSMNT/isolinux/vmlinuz
+    [ -f "$ISOFSMNT/LiveOS/squashfs.img" ] && SQUASHFS=$ISOFSMNT/LiveOS/squashfs.img
+
+    if [ -z "$VMLINUZ" -o -z "$INITRD" -o -z "$SQUASHFS" ]; then
+	echo "The ISO image doesn't look like a LiveCD ISO image."
+	cleanup_error
+    fi
+
+    # Mount the squashfs
+    LIVEFSMNT=$(mktemp -d /var/tmp/$(basename $0)-mount.XXXXXX)
+    mount -o loop "$SQUASHFS" $LIVEFSMNT || cleanup_error
+    # find the real root fs
+    ROOTFS=
+    [ -f "$LIVEFSMNT/LiveOS/ext3fs.img" ] && ROOTFS=$LIVEFSMNT/LiveOS/ext3fs.img
+    [ -f "$LIVEFSMNT/LiveOS/rootfs.img" ] && ROOTFS=$LIVEFSMNT/LiveOS/rootfs.img
+    if [ -z "$ROOTFS" ]; then
+	echo "The ISO image contains an unrecongnized squashfs image."
+	cleanup_error
+    fi
+
+    # Create a writable ext live filesystem containing the real root
+    # image at /LiveOS/ext3fs.img
+    livesize=($(du -B 1M --apparent-size $ROOTFS))
+    realsize=$(($livesize + $EXPAND))
+    echo "Creating a new writable live filesystem of size $realsize MB and type $LIVEFSTYPE"
+    echo "in $ROOTIMAGES/liveos_$LABEL.img"
+    echo "this will take time..."
+    mkdir -p $ROOTIMAGES
+    if [ -f "$ROOTIMAGES/liveos_$LABEL.img" ]; then
+	echo "image $ROOTIMAGES/liveos_$LABEL.img already exists, refusing to overwrite it"
+	echo "if you really want to overwrite it, please remove it and restart this script"
+	cleanup_error
+    fi
+    dd if=/dev/zero of=$ROOTIMAGES/liveos_$LABEL.img bs=1M count=$realsize
+    mkfs -t $LIVEFSTYPE $ROOTIMAGES/liveos_$LABEL.img
+    e2label $ROOTIMAGES/liveos_$LABEL.img $LABEL
+    echo "...done"
+
+    LIVERWFSMNT=$(mktemp -d /var/tmp/$(basename $0)-mount.XXXXXX)
+    mount -o loop "$ROOTIMAGES/liveos_$LABEL.img" $LIVERWFSMNT || cleanup_error
+
+    mkdir $LIVERWFSMNT/LiveOS
+    echo "Copying root fs image on new live filesystem, this will also take time..."
+    cp -p $ROOTFS $LIVERWFSMNT/LiveOS/ext3fs.img
+    umount $LIVERWFSMNT
+    rmdir $LIVERWFSMNT
+    echo "...done"
+    UUID=`get_ext_uuid $ROOTIMAGES/liveos_$LABEL.img`
+    
+    echo "Populating $TFTPBOOT with bootstrap files"
+    mkdir -p $TFTPBOOT
+    cp $VMLINUZ $TFTPBOOT/vmlinuz_$LABEL
+    cp $INITRD $TFTPBOOT/initrd_$LABEL.img
+
+    # pxelinux bootloader.
+    if [ ! -f "$TFTPBOOT/pxelinux.0" -o ! -f "$TFTPBOOT/ldlinux.c32" ]; then
+	echo "Setting up pxelinux"
+	if [ -f /usr/share/syslinux/pxelinux.0 ]; then
+	    cp /usr/share/syslinux/pxelinux.0 $TFTPBOOT
+	    cp /usr/share/syslinux/ldlinux.c32 $TFTPBOOT
+	elif [ -f /usr/lib/syslinux/pxelinux.0 ]; then
+	    cp /usr/lib/syslinux/pxelinux.0 $TFTPBOOT
+	    cp /usr/lib/syslinux/ldlinux.c32 $TFTPBOOT
+	else
+	    echo "Warning: You need to add pxelinux.0 to $TFTPBOOT subdirectory"
+	fi
+    fi
+
+    # Get boot append line from original cd image.
+    if [ -f $ISOFSMNT/isolinux/isolinux.cfg ]; then
+	APPEND=$(grep -m1 append $ISOFSMNT/isolinux/isolinux.cfg | sed -e "s#CDLABEL=[^ ]*#/$ISOBASENAME#" -e "s/ *append *//" -e "s/initrd=.* //")
+    fi
+    APPEND="$APPEND root=live:UUID=$UUID rd.live.image netroot=nbd:10.0.2.2:$LABEL:ext4:ro rootfstype=auto rd.luks=0 rd.md=0 rd.dm=0"
+
+    # move outside to a function
+    # pxelinux configuration improve
+    mkdir -p $TFTPBOOT/pxelinux.cfg
+    cat > $TFTPBOOT/pxelinux.cfg/default <<EOF
+DEFAULT pxeboot
+TIMEOUT 20
+PROMPT 0
+LABEL pxeboot
+	KERNEL vmlinuz_$LABEL
+	APPEND initrd=initrd_$LABEL.img rootflags=loop $APPEND
+ONERROR LOCALBOOT 0
+EOF
+
+    update_nbdconf
+
+    echo "Your pxeboot image is complete."
+    echo
+    echo "Set up your DHCP, TFTP and PXE server to serve $TFTPBOOT/pxeboot.0"
+    echo "and nbd-server to use $ROOTIMAGES/nbd.conf as configuration file"
+    echo "You can test the image with qemu/kvm with the following command line:"
+    echo "qemu-kvm -m 2048 -net nic -net user,tftp=$TFTPBOOT,bootfile=/pxelinux.0"
+    echo "after having started the nbd server."
+
+}
+
+maintain_netroot() {
+
+    # mount live fs
+    FSMNT=$(mktemp -d /var/tmp/$(basename $0)-mount.XXXXXX)
+    mount -o loop "$EXT" $FSMNT || cleanup_error
+
+    trap cleanup_error SIGINT SIGTERM
+    trap cleanup EXIT
+
+    # Does it look like fs?
+    if [ ! -f "$FSMNT/LiveOS/ext3fs.img" -o ! -f "$FSMNT/boot" ]; then
+	echo "The rootfs image doesn't look like a live filesystem image to me."
+	cleanup_error
+    fi
+
+    # mount real root fs
+    ROOTFSMNT=$(mktemp -d /var/tmp/$(basename $0)-mount.XXXXXX)
+    mount -o loop "$FSMNT/LiveOS/ext3fs.img" $ROOTFSMNT || cleanup_error
+    
+    # Does it look like rootfs?
+    if [[ ( ! -d $ROOTFSMNT/etc || ! -f $ROOTFSMNT/boot ) ]]; then
+	echo "The rootfs image doesn't look like a root filesystem image to me."
+	cleanup_error
+    fi
+
+    # mount ancillary filesystems
+    mount -t proc none $ROOTFSMNT/proc
+    mount -t sysfs none $ROOTFSMNT/sys
+    echo "You are going to get a chroot shell on the netroot filesystem"
+    echo "please make any required update and type exit or ctrl-d at the end"
+    chroot $ROOTFSMNT
+
+    # check if kernel and initramfs have changed (improve)
+    kernels=($(ls -rt $ROOTFSMNT/boot/vmlinuz-*.img))
+    initrds=($(ls -rt $ROOTFSMNT/boot/initramfs-*.img))
+    # not guaranteed, improve
+    if [ ! cmp -s ${kernels[-1]} $TFTPBOOT/vmlinuz_$LABEL -o \
+	   ! cmp -s ${initrds[-1]} $TFTPBOOT/initrd_$LABEL.img ]; then
+	echo "kernel and or initramfs seem to have changed,"
+	echo "replacing files in $TFTPBOOT with the new ones,"
+	echo "old files saved in $TFTPBOOT/vmlinuz_$LABEL.old and $TFTPBOOT/initrd_$LABEL.img.old"
+	
+	mv -f $TFTPBOOT/vmlinuz_$LABEL $TFTPBOOT/vmlinuz_$LABEL.old
+	mv -f $TFTPBOOT/initrd_$LABEL.img $TFTPBOOT/initrd_$LABEL.img.old
+	cp -p ${kernels[-1]} $TFTPBOOT/vmlinuz_$LABEL
+	cp -p ${initrds[-1]} $TFTPBOOT/initrd_$LABEL.img
+    fi
+    
+    # unmount ancillary filesystems
+    umount $ROOTFSMNT/sys
+    umount $ROOTFSMNT/proc
+
+    cleanup
+}
+
+if [ $(id -u) != 0 ]; then
+    echo "You need to be root to run this script."
+    exit 1
+fi
+
+# defaults:
+# LABEL (optional)
+LIVEFSTYPE=ext4
+EXPAND=1024
+TFTPBOOT=$PWD/tftp
+ROOTIMAGES=$PWD/images
+# ISO (non option argument)
+# maintain
+# LABEL and ROOTIMAGES deduced from EXT?
+# TFTPBOOT
+# EXT (non option argument)
+ISO=$1
+create_netroot
+
+exit 0
+# to be defined:
+# create
+# LABEL (optional)
+# LIVEFSTYPE
+# EXPAND (MB)
+# TFTPBOOT (dir)
+# ROOTIMAGES (dir)
+# ISO (non option argument)
+# maintain
+# LABEL and ROOTIMAGES deduced from EXT?
+# TFTPBOOT
+# EXT (non option argument)
+
+# 
