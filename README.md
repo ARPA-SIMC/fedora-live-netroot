@@ -16,14 +16,17 @@ The image to be generated can be easily customized by editing the
 kickstart file to be used. The package includes a small set of ready
 kickstart files for creating targeted live images, but in principle
 all the kickstart files available in Fedora packages for building live
-CD's can work with fedora-live-netroot with minimal modification.
+CD's can work with fedora-live-netroot with minimal modification (the
+minimum compulsory differences are the inclusion of `nbd` and
+`dracut-network` packages).
 
 This approach differs from the `livecd-iso-to-pxeboot` shipped with
 the livecd-tools in that here the root file system image is not loaded
 in memory but it is kept untouched on a server and accessed through
 the network, keeping in memory only the departures from the original
 image, so there are not strict limitations on the size of the base
-image.
+image and the memory overhead with respect to a diskful system is
+moderate.
 
 Care has been taken in order to make all the system work with no
 modification to the [dracut](https://fedoraproject.org/wiki/Dracut)
@@ -51,13 +54,32 @@ qemu-system-x86, nbd
 
 ### Generating a live image
 
-```
-livecd-creator --verbose \
- --config=/usr/share/spin-kickstarts/fedora-live-base.ks \
- --fslabel=Fedora-LiveCD --cache=/var/cache/live
-```
+This is not specific to this package, the Fedora `livecd-creator` is
+used in this step:
+
+``` livecd-creator --verbose \
+--config=/usr/share/spin-kickstarts/fedora-live-base.ks \
+--fslabel=Fedora-LiveCD --cache=/var/cache/live ```
 
 see `man livecd-creator` for the options.
+
+If the specific kickstart files provided by this package are to be
+used, since `livecd-creator` lacks an equivalent of `-I` for
+compilers, all the kickstart files have to be merged in a single tree,
+so, assuming to be in the root directory of the package:
+
+```
+ cp -a /usr/share/spin-kickstarts/* spin/kickstarts
+ livecd-creator --verbose \
+  --config=spin-kickstarts/fedora-live-netroot-hpcnode.ks \
+  --fslabel=Fedora-LiveHPCNode --cache=/var/cache/live
+ ```
+
+A reminder for the unlucky users living behind an http proxy, the
+correct environment variable for proxifying the livecd installation
+is:
+
+``` export http_proxy=http://<user>:<passwd>@<host>:<port>/ ```
 
 ### Generating a netroot live image
 
