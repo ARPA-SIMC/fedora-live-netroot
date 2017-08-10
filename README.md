@@ -57,9 +57,11 @@ qemu-system-x86, nbd
 This is not specific to this package, the Fedora `livecd-creator` is
 used in this step:
 
-``` livecd-creator --verbose \
---config=/usr/share/spin-kickstarts/fedora-live-base.ks \
---fslabel=Fedora-LiveCD --cache=/var/cache/live ```
+```
+livecd-creator --verbose \
+ --config=/usr/share/spin-kickstarts/fedora-live-base.ks \
+ --fslabel=Fedora-LiveCD --cache=/var/cache/live
+```
 
 see `man livecd-creator` for the options.
 
