@@ -197,8 +197,9 @@ EOF
 
 }
 
-maintain_netroot() {
 
+mount_netroot()
+{
     # mount live fs
     FSMNT=$(mktemp -d /var/tmp/$(basename $0)-mount.XXXXXX)
     mount -o loop "$EXT" $FSMNT || cleanup_error
@@ -225,6 +226,39 @@ maintain_netroot() {
     # mount ancillary filesystems
     mount -t proc none $ROOTFSMNT/proc
     mount -t sysfs none $ROOTFSMNT/sys
+}
+
+
+umount_netroot() {
+    # unmount ancillary filesystems
+    umount $ROOTFSMNT/sys
+    umount $ROOTFSMNT/proc
+    # unmount root fs's
+    cleanup
+}
+
+
+firstboot_netroot() {
+
+    mount_netroot
+
+    # systemd-firstboot can be run w/o chroot, sets interactively
+    # timezone, hostname, root passwd, etc. if not already set
+    systemd-firstboot --root=$ROOTFS --prompt
+    # set sshd keys in chroot
+    for host_key in rsa ecdsa ed25519; do # keep list updated
+	chroot $ROOTFS/usr/libexec/openssh/sshd-keygen $host_key
+    done
+
+    umount_netroot
+
+}
+
+
+maintain_netroot() {
+
+    mount_netroot
+
     echo "You are going to get a chroot shell on the netroot filesystem"
     echo "please make any required update and type exit or ctrl-d at the end"
     chroot $ROOTFSMNT
@@ -244,12 +278,9 @@ maintain_netroot() {
 	cp -p ${kernels[-1]} $TFTPBOOT/vmlinuz_$LABEL
 	cp -p ${initrds[-1]} $TFTPBOOT/initrd_$LABEL.img
     fi
-    
-    # unmount ancillary filesystems
-    umount $ROOTFSMNT/sys
-    umount $ROOTFSMNT/proc
 
-    cleanup
+    umount_netroot
+    
 }
 
 if [ $(id -u) != 0 ]; then
