@@ -1,7 +1,6 @@
 Summary: Create Fedora images with read-only root fs on network and writable overlay in memory
 Name: live-netroot
 Version: xxx
-#Release: 1
 Release: 1
 License: GPL
 Group: System Environment/Base
@@ -29,7 +28,7 @@ a writable filesystem in memory.
 %build
 
 %configure --libdir=%{_prefix}/lib
-#make
+#make # nothing to build
 
 %install
 
