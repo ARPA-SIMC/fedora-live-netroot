@@ -48,3 +48,4 @@ rm -f -- %{buildroot}%{_prefix}/lib/dracut/modules.d/README
 %defattr(-, root, root)
 %{_prefix}/lib/dracut/modules.d/*
 %{_bindir}/*
+%doc README.md README.overlay-root
