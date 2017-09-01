@@ -27,7 +27,7 @@ clean:
 	$(RM) *~
 	$(RM) */*~
 	$(RM) */*/*~
-	$(RM) *.tar.bz2 *.tar.xz *.tar.gz
+	$(RM) *.tar.bz2 *.tar.xz *.tar.gz *.rpm
 
 dist: $(PACKAGE)-$(VERSION).tar.gz
 
@@ -37,11 +37,13 @@ $(PACKAGE)-$(VERSION).tar.gz:
 rpm: $(PACKAGE)-$(VERSION).tar.gz
 	rpmbuild=$$(mktemp -d -t rpmbuild-$(PACKAGE).XXXXXX); src=$$(pwd); \
 	cp $(PACKAGE)-$(VERSION).tar.gz "$$rpmbuild"; \
-	cp $(PACKAGE).spec $$rpmbuild/$(PACKAGE).spec; \
+	sed -e "s/^Version: xxx/Version: $(VERSION)/" $(PACKAGE).spec > "$$rpmbuild/"$(PACKAGE).spec; \
 	(cd "$$rpmbuild"; \
 	rpmbuild --define "_topdir $$PWD" --define "_sourcedir $$PWD" \
 	        --define "_specdir $$PWD" --define "_srcrpmdir $$PWD" \
 		--define "_rpmdir $$PWD" -ba $(PACKAGE).spec; ) && \
-	( mv "$$rpmbuild"/{,$$(arch)/}*.rpm $(DESTDIR).; rm -fr -- "$$rpmbuild"; ls $(DESTDIR)*.rpm )
+	( mv "$$rpmbuild"/{,$$(arch)/,noarch/}*.rpm $(DESTDIR).; rm -fr -- "$$rpmbuild"; ls $(DESTDIR)*.rpm )
 
 .PHONY: clean
+
+#	cp $(PACKAGE).spec $$rpmbuild/$(PACKAGE).spec; \
