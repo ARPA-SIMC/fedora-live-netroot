@@ -1,0 +1,4 @@
+LIVEOS="yes"
+PROBE="no"
+MODULES+=vfat msdos isofs xfs btrfs nbd
+
