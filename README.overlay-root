@@ -12,3 +12,6 @@ underlying tmpfs.
 The original root and the tmpfs will be mounted at /live/image and
 /live/cow in the final rootfs.
 
+The module is derived from the FAI (Fully automatic Installation)
+project by Thomas Lange, https://fai-project.org/ and licensed under
+GNU GPL license.
