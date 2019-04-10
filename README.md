@@ -1,7 +1,7 @@
 # Fedora-live-netroot
 
-This package allows to setup a Fedora or CentOS root filesystem for a
-diskless installation, in the initial approach it borrowed some
+This package allows to install a Fedora or CentOS root filesystem for
+booting a diskless system, in the initial approach it borrowed some
 concepts from live distributions, thus the name, but it has
 successively departed from that. It is mainly oriented to HPC cluster
 diskless nodes, but it can be adapted for installing systems with a
@@ -14,16 +14,18 @@ container in singularity jargon) to be served to the diskless client
 by nfs or as a squashfs (or possibly other filesystems) image file to
 be served as a nbd device or iscsi target (both untested).
 
-By default the root filesystem image is served in read-only mode, thus
-it can be shared among many diskless clients, the filesystem is made
-read-write by the client by means of an in-memory overlay filesytem,
-whose contents gets lost at every reboot.
+By default, the root filesystem image is served in read-only mode,
+thus it can be shared among many diskless clients, the filesystem is
+made read-write by the client thanks to an in-memory tmpfs
+superimposed on the network file system by means of overlayfs kernel
+module. The contents of the root filesystem gets thus lost at every
+reboot.
 
 It is however possible to serve the image in read-write mode to a
 single client.
 
 The image can be quickly tested in a virtual environment with
-qemu-kvm.
+qemu(-kvm).
 
 ## Dependencies and compatibility
 
@@ -35,9 +37,10 @@ netbsd-iscsi (or iscsi-initiator-utils).
 
 The system has been tested with CentOS 7, Fedora 28 and Fedora 29 as
 diskless client distributions. Three corresponding basic installation
-recipes are provided for these distributions. The host system was a
-Fedora 24 system with a custom updated singularity package, it should
-work on CentOS 7 and later Fedora as well.
+recipes are provided for these distributions. The host system had a
+Fedora 24 distro with a custom updated singularity package (v2.5.1),
+it should however work on any host distribution capable to bootstrap a
+yum/dnf based filesystem with singularity.
 
 ## Quick start on a virtual environment
 
@@ -46,11 +49,11 @@ script which does the work of installing the operating system on a
 local directory, installing a local pxe bootloader and starting a
 virtual system with qemu emulating the pxe network boot process.
 
-The only preliminary operation is to adjust the contents of the file
-`live_netroot_hosts` for setting up a list of labels referring to
-configured systems. Every label is associated with a single
-installation recipe, but it may be associated to different root
-filesystem provisioning (e.g. nfs and nbd).
+The only preliminary operation required is to adjust the contents of
+the file `live_netroot_hosts` for setting up a list of labels
+referring to configured systems. Every label is associated with a
+single installation recipe, but it may be associated to different root
+filesystem provisioning method (e.g. nfs and nbd).
 
 The variables to be defined for each label are:
  * `NETROOT` directory where the root filesystem will be built on the
@@ -68,7 +71,7 @@ The variables to be defined for each label are:
    boot process and output of all the log information to a local file
    through a serial console in qemu.
 
-The procdedure, using the `live_netroot` script, assuming to build a
+The procedure, using the `live_netroot` script, assuming to build a
 system with the centos7-base recipe, will be:
 
  * build the root filesystem tree, this will take long time and
@@ -115,6 +118,14 @@ singularity, so that, e.g., new packages can be installed:
 Note that this breaks the reproducibility of the system through the
 recipe, but it is probably unavoidable if you need to install a
 complete system.
+
+With nfs, it is also possible to modify the read-only root filesystem
+of a running system from the host (e.g. installing new packages or
+changing configuration files), however this should be done with care,
+in particular, when changing files which are in use by the running
+system, the modifications may not take effect or could generate a
+`stale file handle` error in the client, in the latter case the
+command `mount -o remount /` on the diskless client system may help.
 
 ## Deploying on a real environment
 
