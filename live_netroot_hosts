@@ -1,0 +1,37 @@
+# variables to be set for every label:
+# TFTPBOOT
+# RW
+# DEBUG
+# NETROOT
+# RECIPE
+
+# default for all labels
+base=$PWD
+TFTPBOOT=$base/tftp
+RW=N
+DEBUG=N
+#label-specific configuration
+case $label in
+    centos7)
+	NETROOT=$base/centos7-base
+	RECIPE=$base/centos7-base.def
+	;;
+    fedora28)
+	NETROOT=$base/fedora28-base
+	RECIPE=$base/fedora28-base.def
+	;;
+    fedora29)
+	NETROOT=$base/fedora29-base
+	RECIPE=$base/fedora29-base.def
+	;;
+    fedora30) # problems with NetworkManager
+	NETROOT=$base/fedora30-base
+	RECIPE=$base/fedora30-base.def
+	#RW=Y
+	#DEBUG=Y
+	;;
+    *)
+	echo "Label $label not configured"
+	usage
+	;;
+esac

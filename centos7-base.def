@@ -1,0 +1,65 @@
+BootStrap: yum
+OSVersion: 7
+MirrorURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/os/$basearch/
+Include: yum
+UpdateURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/updates/$basearch/
+
+%runscript
+    exec "$@"
+
+%setup
+    rsync -a base/ ${SINGULARITY_ROOTFS}
+
+%post
+    yum install -q -y epel-release
+
+# yum-plugin-ovl fixes issue with overlay
+    yum install -q -y yum-plugin-ovl
+
+# basic system + booting, @core requires kernel so extra stuff for
+# booting (nbd, nfs, dracut*) must be in the same transaction in order
+# to build a correct initramfs
+    yum install -q -y @standard @core nfs-utils autofs authconfig \
+    nbd kernel kernel-modules kernel-modules-extra \
+    dracut-live dracut-network
+
+# now configure the system before first boot, something inherited from
+# python-imgcreate.kickstart, SINGULARITY_DEFFILE_OSVERSION could be
+# used to distinguish versions
+
+# generate once for all ssh host keys, sshd-keygen does not work in chroot
+/usr/sbin/sshd-keygen rsa
+/usr/sbin/sshd-keygen ecdsa
+/usr/sbin/sshd-keygen ed25519
+# use systemd-firstboot where possible, root passwd ignored here
+systemd-firstboot --locale=en_US.UTF-8 --timezone=UTC
+# configure keyboard
+cat <<EOF > /etc/vconsole.conf
+KEYMAP="us"
+FONT="eurlatgr"
+EOF
+# configure root password
+echo ciao | /usr/bin/passwd --stdin root
+# disable selinux
+sed -i -e 's/^SELINUX=.*$/SELINUX=disabled/g' /etc/selinux/config
+# configure network
+cat <<EOF > /etc/sysconfig/network
+NETWORKING=yes
+NETWORKING_IPV6=no
+EOF
+cat <<EOF > /etc/hosts
+127.0.0.1		localhost.localdomain localhost
+::1		localhost6.localdomain6 localhost6
+EOF
+# change default services, allow failure due to missing units
+for serv in rewrite-ifcfg NetworkManager dbus-daemon rdma; do
+    systemctl enable $serv || true
+done
+for serv in network systemd-random-seed mdmonitor firewalld atd auditd \
+  abrtd abrt-xorg abrt-vmcore abrt-journal-core abrt-oops; do
+    systemctl disable $serv || true
+done
+# authconfig from kickstart
+authconfig --update --nostart --useshadow --passalgo=sha512
+
+%end
