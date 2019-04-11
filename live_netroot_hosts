@@ -16,6 +16,10 @@ case $label in
 	NETROOT=$base/centos7-base
 	RECIPE=$base/centos7-base.def
 	;;
+    centos7-hpcnode)
+	NETROOT=$base/centos7-hpcnode
+	RECIPE=$base/centos7-hpcnode.def
+	;;
     fedora28)
 	NETROOT=$base/fedora28-base
 	RECIPE=$base/fedora28-base.def

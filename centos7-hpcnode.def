@@ -1,0 +1,152 @@
+BootStrap: yum
+OSVersion: 7
+MirrorURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/os/$basearch/
+Include: yum
+UpdateURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/updates/$basearch/
+
+%runscript
+    exec "$@"
+
+%setup
+    rsync -a base/ ${SINGULARITY_ROOTFS}
+    mkdir ${SINGULARITY_ROOTFS}/tmpstorage
+    cp -p /etc/hosts /etc/ssh/ssh_host_* /etc/openmpi-x86_64/openmpi-mca-params.conf /etc/munge/munge.key ${SINGULARITY_ROOTFS}/tmpstorage
+
+
+%post
+    yum install -q -y epel-release
+
+# yum-plugin-ovl fixes issue with overlay
+    yum install -q -y yum-plugin-ovl yum-plugin-copr
+
+# basic system + booting, @core requires kernel so extra stuff for
+# booting (nbd, nfs, dracut*) must be in the same transaction in order
+# to build a correct initramfs
+    yum install -q -y @standard @core nfs-utils autofs authconfig \
+    nbd kernel kernel-modules kernel-modules-extra \
+    dracut-live dracut-network
+
+# admin, debug
+    yum install -q -y ipmitool iscsi-initiator-utils perf \
+    dmidecode freeipmi ipmiutil \
+    ganglia ganglia-gmond ganglia-gmetad
+
+# hpc applications and libraries
+    yum install -q -y libgfortran openmpi hdf5-openmpi netcdf-openmpi \
+    netcdf-fortran-openmpi hdf5 netcdf netcdf-fortran
+
+# scheduling of hpc applications
+    yum install -q -y torque torque-libs munge
+# slurm not provided in official repos
+
+# for infiniband
+    yum install -q -y rdma libcxgb3 libcxgb4 libmlx4 libmlx5 libipathverbs \
+    libmthca libnes ibutils libibverbs libibverbs-utils infiniband-diags \
+    perftest qperf librdmacm-utils
+
+# for glusterfs
+    yum install -q -y glusterfs glusterfs-server glusterfs-rdma \
+    glusterfs-cli glusterfs-fuse
+
+# hpc applications and libraries
+    yum install -y atlas atlas-devel blas blas-devel lapack lapack-devel \
+    fftw-libs-double fftw-libs-single  \
+    git git-core git-core-doc git-svn grads \
+    grib_api-devel gsl gsl-devel ImageMagick ImageMagick-c++ \
+    ImageMagick-libs GraphicsMagick openmpi \
+    hdf hdf5-devel hdf5-openmpi hdf5-openmpi-devel ksh \
+    ncl ncl-common ncl-devel \
+    nco netcdf-cxx netcdf-cxx-devel netcdf-cxx4-openmpi netcdf-cxx4-openmpi-devel \
+    netcdf-devel netcdf-fortran-devel netcdf-fortran-openmpi \
+    netcdf-fortran-openmpi-devel netcdf-openmpi-devel openmpi-devel \
+    plplot plplot-data plplot-devel plplot-doc plplot-fortran-devel plplot-libs \
+    proj proj-devel proj-epsg proj-nad R R-core R-core-devel \
+    R-devel strace subversion udunits2 \
+    unique valgrind valgrind-openmpi vim-common vim-enhanced \
+    vim-filesystem wgrib wgrib2 shapelib shapelib-devel shapelib-tools \
+    numpy numpy-f2py octave scipy NLopt
+
+# simc applications
+    yum copr enable -q -y simc/stable
+
+    yum install -y arkimet dballe dballe-common fortrangis \
+    fortrangis-devel libsim libsim-devel libsmr libwreport3 \
+    libwreport-common libwreport-devel meteosatlib meteosatlib-gdal \
+    meteosatlib-tools meteo-vm2 meteo-vm2-utils meteo-vm2-devel \
+    radarcoordlib radarlib radarlib-devel radarlib-tools simcop \
+    simc-r-utils ugrib verifica wreport arkimet-devel \
+    arkimet-postprocess-bufr arkimet-postprocess-json \
+    arkimet-postprocess-odimh5filter arkimet-postprocess-seriet \
+    arkimet-postprocess-singlepoint arkimet-postprocess-subarea \
+    bufr2json bufr2netcdf fortrangis fortrangis-devel
+
+
+# now configure the system before first boot, something inherited from
+# python-imgcreate.kickstart, SINGULARITY_DEFFILE_OSVERSION could be
+# used to distinguish versions
+
+# generate once for all ssh host keys, sshd-keygen does not work in chroot
+#/usr/sbin/sshd-keygen rsa
+#/usr/sbin/sshd-keygen ecdsa
+#/usr/sbin/sshd-keygen ed25519
+cp -p /tmpstorage/ssh_host_* /etc/ssh
+chgrp ssh_keys /etc/ssh/*_key
+# use systemd-firstboot where possible, root passwd ignored here
+systemd-firstboot --locale=en_US.UTF-8 --timezone=UTC
+# configure keyboard
+cat <<EOF > /etc/vconsole.conf
+KEYMAP="us"
+FONT="eurlatgr"
+EOF
+# configure root password
+#echo ciao | /usr/bin/passwd --stdin root
+# disable selinux
+sed -i -e 's/^SELINUX=.*$/SELINUX=disabled/g' /etc/selinux/config
+# configure network
+cat <<EOF > /etc/sysconfig/network
+NETWORKING=yes
+NETWORKING_IPV6=no
+EOF
+cp -p /tmpstorage/hosts /etc/hosts
+# change default services, allow failure due to missing units
+for serv in rewrite-ifcfg autofs NetworkManager dbus-daemon rdma; do
+    systemctl enable $serv || true
+done
+for serv in network systemd-random-seed mdmonitor firewalld atd auditd \
+  abrtd abrt-xorg abrt-vmcore abrt-journal-core abrt-oops; do
+    systemctl disable $serv || true
+done
+# authconfig from kickstart
+authconfig --update --nostart --useshadow --passalgo=sha512
+# fix to ssh server required for remotely launching parallel processes
+# that make use of Infiniband (analog of ulimit -l unlimited)
+mkdir -p /etc/systemd/system/sshd.service.d
+cat  <<EOF > /etc/systemd/system/sshd.service.d/memlock.conf
+[Service]
+LimitMEMLOCK=infinity
+EOF
+# tune network for nfs over ib
+cat <<EOF > /etc/sysctl.d/90-ibtuning.conf
+# allow testing with buffers up to 64MB 
+net.core.rmem_max = 67108864 
+net.core.wmem_max = 67108864 
+# increase Linux autotuning TCP buffer limit to 32MB
+net.ipv4.tcp_rmem = 4096 87380 33554432
+net.ipv4.tcp_wmem = 4096 65536 33554432
+# recommended default congestion control is htcp 
+#net.ipv4.tcp_congestion_control=htcp
+# recommended for hosts with jumbo frames enabled
+net.ipv4.tcp_mtu_probing=1
+# recommended for CentOS7/Debian8 hosts
+net.core.default_qdisc = fq
+EOF
+# configure munge key
+cp -p /tmpstorage/munge.key /etc/munge/munge.key
+chown munge.munge /etc/munge/munge.key
+# configure openmpi
+cp -p /tmpstorage/openmpi-mca-params.conf /etc/openmpi-x86_64/openmpi-mca-params.conf
+rm -rf /tmpstorage
+# add users
+# add /fs tree
+
+%end
