@@ -16,6 +16,11 @@ case $label in
 	NETROOT=$base/centos7-base
 	RECIPE=$base/centos7-base.def
 	;;
+    centos7-lustre)
+	NETROOT=$base/centos7-lustre
+	RECIPE=$base/centos7-lustre.def
+	EXTRA_QEMU="-drive file=lustre0.img,index=0,media=disk,boot=off -drive file=lustre1.img,index=1,media=disk,boot=off"
+	;;
     centos7-hpcnode)
 	NETROOT=$base/centos7-hpcnode
 	RECIPE=$base/centos7-hpcnode.def

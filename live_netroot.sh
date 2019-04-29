@@ -97,7 +97,7 @@ startvm() {
     # console to file
     qemu-kvm -m 2048 -net nic \
 	     -net user,tftp=$TFTPBOOT,bootfile=/pxelinux.0,hostfwd=tcp:127.0.0.1:2222-:22 \
-	     -serial file:serial.out
+	     -serial file:serial.out $EXTRA_QEMU
 }
 
 set -e
