@@ -44,8 +44,9 @@ UpdateURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/updates/$ba
     libmthca libnes ibutils libibverbs libibverbs-utils infiniband-diags \
     perftest qperf librdmacm-utils
 
-# for glusterfs
-    yum install -q -y glusterfs glusterfs-server glusterfs-rdma \
+# for glusterfs, use newer packages 4.1
+    yum install -y centos-release-gluster41.noarch
+    yum install -y glusterfs glusterfs-server glusterfs-rdma \
     glusterfs-cli glusterfs-fuse
 
 # hpc applications and libraries
