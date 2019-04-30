@@ -38,6 +38,17 @@ UpdateURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/updates/$ba
 # scheduling of hpc applications
     yum install -q -y torque torque-libs munge
 # slurm not provided in official repos
+    cat > /etc/yum.repos.d/springdale-7-computational.repo << EOF
+[computational-core]
+name=Springdale computational Base \$releasever - \$basearch
+mirrorlist=http://springdale.princeton.edu/data/springdale/computational/\$releasever/\$basearch/mirrorlist
+#baseurl=http://springdale.princeton.edu/data/springdale/computational/\$releasever/\$basearch
+gpgcheck=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-springdale
+EOF
+    yum install -y slurm slurm-slurmd slurm-slurmctld slurm-slurmdbd \
+    slurm-pam_slurm slurm-example-configs
+    mkdir /var/spool/slurm
 
 # for infiniband
     yum install -q -y rdma libcxgb3 libcxgb4 libmlx4 libmlx5 libipathverbs \
@@ -149,5 +160,8 @@ cp -p /tmpstorage/openmpi-mca-params.conf /etc/openmpi-x86_64/openmpi-mca-params
 rm -rf /tmpstorage
 # add users
 # add /fs tree
+# slurm
+systemctl enable munge
+systemctl enable slurmd
 
 %end
