@@ -19,21 +19,19 @@ thus it can be shared among many diskless clients, the filesystem is
 made read-write by the client thanks to an in-memory tmpfs
 superimposed over the network file system by means of overlayfs kernel
 module. The modifications of the root filesystem get thus lost at
-every reboot.
-
-It is however possible to serve the image in read-write mode to a
-single client.
+every reboot. It is however possible to serve the image in read-write
+mode to a single client.
 
 The image can be quickly tested in a virtual environment with
 qemu(-kvm).
 
 ## Installation, dependencies and compatibility
 
-For installing the package, simply clone the github source repository
-in the desired working directory. It is assumed that all the
-operations are done by the `root` user.
+For installing the package, simply clone the github source tree
+repository in the desired working directory. It is assumed that all
+the operations are done by the `root` user.
 
-Fedora_live_netroot requires the following packages:
+Fedora-live-netroot requires the following packages:
 
  * singularity for building the image
  * qemu, syslinux (syslinux-nonlinux if exists), nfs-utils (and a
@@ -52,26 +50,26 @@ yum/dnf based filesystem with singularity.
 
 ### Quick start on a virtual environment
 
-For a quick start, it is suggested to use the provided `live_netroot`
-script and OS recipes `*.def`. The script does the work of installing
-the operating system on a local directory, installing a local pxe
-bootloader and starting a virtual system with qemu emulating the pxe
-network boot process.
+For a quick start, it is suggested to use the script `live_netroot`
+and the singularity recipes `*.def` included in the source tree. The
+script does the work of installing the operating system on a local
+directory, installing a local pxe bootloader and starting a virtual
+system with qemu emulating the pxe network boot process.
 
 Assuming to build a system with the centos7-base recipe, the steps
 will be:
 
- * build the root filesystem tree, this will take long time and
-   require an internet connection, remember to remove an existing
-   filesystem tree before a rebuild:
+ * build the guest diskless root filesystem tree, this will take long
+   time and require an internet connection, remember to remove an
+   existing filesystem tree before a rebuild:
  
 ```
 ./live_netroot build centos7
 ```
 
- * install the syslinux pxe bootloader and the initial OS images for
-   network booting by nfs, make the installed image the default for
-   booting:
+ * install the syslinux pxe bootloader, kernel and initramfs image for
+   network booting by nfs in the host system, make the installed image
+   the default for booting:
 
 ```
 ./live_netroot installnfs centos7
@@ -114,12 +112,12 @@ The variables to be defined for each label are:
    for network booting by qemu, it can be the same for different
    images, but only one image will be the one to be booted by default
  * `RW` equal to `Y` if the root filesystem should be mounted
-   read-write, without a in-memory overlay, in the booted system
- * `DEBUG` equal to `Y` if debugging should be enabled in the booted
+   read-write, without an in-memory overlay, in the guest system
+ * `DEBUG` equal to `Y` if debugging should be enabled in the guest
    system, this includes a verbose debugging of the pre-rootfs dracut
    boot process and output of all the log information to a local file
-   through a serial console in qemu.
- * `EXTRA_QEMU` extra options for qemu
+   through a serial console in qemu
+ * `EXTRA_QEMU` extra options for qemu.
 
 ### Customisation of the installed system
 
@@ -139,11 +137,11 @@ complete system.
 With nfs, it is also possible to modify the read-only root filesystem
 from the host (e.g. installing new packages or changing configuration
 files) while the system (virtual or real) is running. This should be
-however done with care, in particular, when changing files which are
-in use by the running system, the modifications may not take effect or
-could generate a `stale file handle` error in the client, in the
-latter case the command `mount -o remount /` on the diskless client
-system usually recovers from the error.
+however done with care since, when changing files which are in use by
+the running system, the modifications may not take effect or could
+generate a `stale file handle` error in the client; in the latter case
+the command `mount -o remount /` on the diskless client system usually
+recovers from the error.
 
 
 ### Deploying on a real environment
@@ -152,7 +150,7 @@ Once the system works in a satisfactory way in the virtual
 environment, the deployment on a real system requires mainly the two
 following steps:
 
- 1. set up a real dhcp and tftp server for providing ip address, boot
+ 1. set up real dhcp and tftp servers for providing ip address, boot
     loader file, kernel and initramfs image to the diskless clients;
     the directory tree to be exported by tftp can be taken from the
     one created for the virtual environment applying proper
