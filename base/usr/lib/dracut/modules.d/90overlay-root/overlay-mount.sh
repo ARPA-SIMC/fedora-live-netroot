@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# make a read-only nfsroot writeable by using overlayfs
+# make a read-only nfsroot writable by using overlayfs
 # the nfsroot is already mounted to $NEWROOT
 # add the parameter rootovl to the kernel, to activate this feature
 
@@ -16,8 +16,6 @@ modprobe overlay
 mount -o remount,nolock,noatime $NEWROOT
 
 # Move root
-# --move does not always work. Google >mount move "wrong fs"< for
-#     details
 mkdir -p /live/image
 mount --bind $NEWROOT /live/image
 umount $NEWROOT
@@ -33,7 +31,15 @@ mount -t overlay -o noatime,lowerdir=/live/image,upperdir=/cow/rw,workdir=/cow/w
 # Let filesystems survive pivot
 mkdir -p $NEWROOT/live/cow
 mkdir -p $NEWROOT/live/image
-mount --bind /cow/rw $NEWROOT/live/cow
+mount --bind /cow $NEWROOT/live/cow
 umount /cow
 mount --bind /live/image $NEWROOT/live/image
 umount /live/image
+
+# Update filesystem with custom configuration
+rootovlcfg=$(getargs rootovlcfg)
+if [ -n "$rootovlcfg" ]; then
+    if [ -d $NEWROOT/etc/rootovl/$rootovlcfg ]; then
+	cp -a $NEWROOT/etc/rootovl/$rootovlcfg/* $NEWROOT
+    fi
+fi

@@ -144,6 +144,37 @@ generate a `stale file handle` error in the client; in the latter case
 the command `mount -o remount /` on the diskless client system usually
 recovers from the error.
 
+### Further per-host custom cunfigurations
+
+If the same base image is used for booting different hosts, requiring
+different configurations that cannot be performed through dhcp
+arguments, e.g. setting a static network configuration on a different
+network interface, it is possible to populate the read-only root
+filesystem image with a set of file trees that can replace the files
+in the base read-only image, depending on kernel command-line
+arguments.
+
+This is done in the following way:
+
+1. in the base root fs create a directory `etc/rootovl/<config-name>`
+   and populate it with the files that need to be added or modified,
+   starting from the root of the filesystem, so, for changing
+   `/etc/sysconfig/network-scripts/ifcfg-ens20f0` you need to create
+   the file
+   `etc/rootovl/<config-name>/etc/sysconfig/network-scripts/ifcfg-ens20f0`
+   in the root tree
+
+2. start the diskless system adding the `rootovl=<config-name>` kernel
+   command-line argument (this can be done with the `EXTRA_CMDLINE`
+   environment variable in the qemu test environment).
+
+If everything works, the root filesystem at pivot-root time will
+contain the requested modifications, which will reside in the memory
+overlay, while diskless systems started without `rootovl` argument
+will see the default root filesystem. Any number of different
+configuration trees can be created in the `etc/rootovl` directory. It
+is not however possible to erase a file as for a specific host
+configuration.
 
 ### Deploying on a real environment
 
@@ -162,7 +193,6 @@ following steps:
     unlike the case for the virtual environment, the `insecure` option
     may be omitted for a real case, and the network/mask should be set
     accordingly.
-
 
 ## Security considerations
 
