@@ -10,6 +10,8 @@ base=$PWD
 TFTPBOOT=$base/tftp
 RW=N
 DEBUG=N
+EXTRA_QEMU=
+EXTRA_CMDLINE=
 #label-specific configuration
 case $label in
     centos7)

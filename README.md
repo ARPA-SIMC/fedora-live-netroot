@@ -117,6 +117,7 @@ The variables to be defined for each label are:
    system, this includes a verbose debugging of the pre-rootfs dracut
    boot process and output of all the log information to a local file
    through a serial console in qemu
+ * `EXTRA_CMDLINE` extra kernel command-line arguments
  * `EXTRA_QEMU` extra options for qemu.
 
 ### Customisation of the installed system

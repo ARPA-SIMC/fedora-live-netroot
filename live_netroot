@@ -63,6 +63,9 @@ copykernel() {
 
 addpxelinuxentry() {
     pxelabel=$1
+    if [ "$EXTRA_CMDLINE" ]; then
+	cmdline="$cmdline $EXTRA_CMDLINE"
+    fi
     if [ "$DEBUG" = "Y" ]; then
 	cmdline="$cmdline rd.debug console=ttyS0,38400"
     fi
