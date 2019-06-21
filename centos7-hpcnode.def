@@ -41,8 +41,8 @@ UpdateURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/updates/$ba
     cat > /etc/yum.repos.d/springdale-7-computational.repo << EOF
 [computational-core]
 name=Springdale computational Base \$releasever - \$basearch
-mirrorlist=http://springdale.princeton.edu/data/springdale/computational/\$releasever/\$basearch/mirrorlist
-#baseurl=http://springdale.princeton.edu/data/springdale/computational/\$releasever/\$basearch
+#mirrorlist=http://springdale.princeton.edu/data/springdale/computational/\$releasever/\$basearch/mirrorlist
+baseurl=http://springdale.princeton.edu/data/springdale/computational/\$releasever/\$basearch
 gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-springdale
 EOF
