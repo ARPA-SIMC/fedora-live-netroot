@@ -9,10 +9,7 @@ with a different purpose.
 
 It makes (ab)use of the [singularity](https://www.sylabs.io/)
 container software for bootstrapping and administering the root
-filesystem image. The image can be set up as a directory tree (sandbox
-container in singularity jargon) to be served to the diskless client
-by nfs or as a squashfs (or possibly other filesystems) image file to
-be served as a nbd device or iscsi target (both untested).
+filesystem image.
 
 By default, the root filesystem image is served in read-only mode,
 thus it can be shared among many diskless clients, the filesystem is
@@ -43,8 +40,8 @@ The system has been tested with CentOS 7, Fedora 28 and Fedora 29 as
 diskless client distributions. Three corresponding basic installation
 recipes are provided for these distributions. The host system had a
 Fedora 24 distro with a custom updated singularity package (v2.5.1),
-it should however work on any host distribution capable to bootstrap a
-yum/dnf based filesystem with singularity.
+it should however work on any host distribution capable of
+bootstrapping a yum/dnf-based filesystem with singularity.
 
 ## Running
 
@@ -78,16 +75,18 @@ will be:
  * start the virtual machine simulating network pxe boot using the
    created image as root filesystem, this command also takes care of
    exporting the root filesystem by nfs to the virtual system and
-   unexporting it at the end:
+   unexporting it at the end (the nfs server must have already been
+   started at this moment, e.g. with `systemctl start nfs.service`):
 
 ```
 ./live_netroot startnfs centos7
 ```
 
-now you can login to the guest virtual machine using the root password
+now you can log onto the guest virtual machine using the root password
 specified in the recipe file (`centos7-base.def` in this case) from
 the qemu console or from the local host via ssh on port 2222 as
-specified in the qemu port redirection option:
+specified in the qemu port redirection option in `live_netroot`
+script:
 
 ```
 ssh -p 2222 root@localhost
@@ -140,19 +139,19 @@ from the host (e.g. installing new packages or changing configuration
 files) while the system (virtual or real) is running. This should be
 however done with care since, when changing files which are in use by
 the running system, the modifications may not take effect or could
-generate a `stale file handle` error in the client; in the latter case
+generate a `stale file handle` error on the client; in the latter case
 the command `mount -o remount /` on the diskless client system usually
 recovers from the error.
 
-### Further per-host custom cunfigurations
+### Further per-host custom configurations
 
 If the same base image is used for booting different hosts, requiring
-different configurations that cannot be performed through dhcp
-arguments, e.g. setting a static network configuration on a different
-network interface, it is possible to populate the read-only root
-filesystem image with a set of file trees that can replace the files
-in the base read-only image, depending on kernel command-line
-arguments.
+different configurations that cannot easily be applied through kernel
+command-line or dhcp arguments, e.g. setting a static network
+configuration on a different network interface, it is possible to
+populate the read-only root filesystem image with a set of file trees
+that can replace the files in the base read-only image before
+pivot-root, depending on kernel command-line arguments.
 
 This is done in the following way:
 
@@ -164,14 +163,14 @@ This is done in the following way:
    `etc/rootovl/<config-name>/etc/sysconfig/network-scripts/ifcfg-ens20f0`
    in the root tree
 
-2. start the diskless system adding the `rootovl=<config-name>` kernel
-   command-line argument (this can be done with the `EXTRA_CMDLINE`
-   environment variable in the qemu test environment).
+2. start the diskless system adding the `rootovlcfg=<config-name>`
+   kernel command-line argument (this can be done with the
+   `EXTRA_CMDLINE` environment variable in the qemu test environment).
 
 If everything works, the root filesystem at pivot-root time will
 contain the requested modifications, which will reside in the memory
-overlay, while diskless systems started without `rootovl` argument
-will see the default root filesystem. Any number of different
+overlay, while diskless systems started without `rootovlcfg` argument
+will see the unmodified root filesystem. Any number of different
 configuration trees can be created in the `etc/rootovl` directory. It
 is not however possible to erase a file as for a specific host
 configuration.
@@ -206,7 +205,28 @@ measures.
 The root password explicitly set in the example recipes is for testing
 purposes only, a safer technique should be used for a real image.
 
-## Internals
+## How does it work
+
+### Preparation of the root filesystem
+
+The root filesystem image is created with the singularity software
+package and the provided recipe files; the image can be set up as a
+directory tree (sandbox container in singularity jargon) to be served
+to the diskless client by nfs or as a squashfs (or possibly other
+filesystems) image file to be served as a nbd device or iscsi target
+(both untested).
+
+The singularity recipe files provided perform mainly the following
+steps:
+
+ * bootstrap of the installation tree
+ * addition of the files contained in the local `base/` directory to
+   the installation tree
+ * installation of the desired packages including kernel (triggering
+   the generation of an intramfs image)
+ * basic customisation of the installed system.
+
+#### The `base/` directory tree
 
 The customisations applied to the installed system, with respect to a
 basic Fedora or CentOS installation, are all contained in the `base/`
@@ -226,5 +246,16 @@ package installation:
    script for the network adapter used to connect to the root fs
    server (created by dracut at boot) in order to subtract it to
    NetworkManager control and avoid disconnections from the server.
+
+### Running the client system
+
+The client system should boot on a network card with PXE technology,
+it receives from the server by tftp the kernel and initramfs images
+extracted from the installation tree.
+
+In nfs mode the scripts on the initramfs image mount the root
+filesystem tree read-only and overlay it with an in-memory tmpfs
+filesystem. After chroot'ing on the prepared filesystem, the system
+works as in an ordinary installation.
 
 
