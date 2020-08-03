@@ -47,7 +47,7 @@ cat <<EOF > /etc/sysconfig/network
 NETWORKING=yes
 NETWORKING_IPV6=no
 EOF
-cat <<EOF > /etc/hosts
+cat <<EOF > /etc/hosts || true
 127.0.0.1		localhost.localdomain localhost
 ::1		localhost6.localdomain6 localhost6
 EOF
@@ -61,5 +61,3 @@ for serv in network systemd-random-seed mdmonitor firewalld atd auditd \
 done
 # authconfig from kickstart
 authconfig --update --nostart --useshadow --passalgo=sha512
-
-%end

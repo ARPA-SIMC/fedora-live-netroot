@@ -60,5 +60,3 @@ done
 # authconfig from kickstart, should we switch to authselect?
 #authconfig --update --nostart --useshadow --passalgo=sha512
 authselect select sssd -f || true
-
-#%end
