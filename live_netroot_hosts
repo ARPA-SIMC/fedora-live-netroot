@@ -10,7 +10,8 @@ base=$PWD
 TFTPBOOT=$base/tftp
 RW=N
 DEBUG=N
-EXTRA_QEMU=
+# if vnc desired instead of a local graphic window
+EXTRA_QEMU="-display vnc=:1"
 EXTRA_CMDLINE=
 #label-specific configuration
 case $label in
@@ -21,11 +22,15 @@ case $label in
     centos7-lustre)
 	NETROOT=$base/centos7-lustre
 	RECIPE=$base/centos7-lustre.def
-	EXTRA_QEMU="-drive file=lustre0.img,index=0,media=disk,boot=off -drive file=lustre1.img,index=1,media=disk,boot=off"
+	EXTRA_QEMU="$EXTRA_QEMU -drive file=lustre0.img,index=0,media=disk,boot=off -drive file=lustre1.img,index=1,media=disk,boot=off"
 	;;
     centos7-hpcnode)
 	NETROOT=$base/centos7-hpcnode
 	RECIPE=$base/centos7-hpcnode.def
+	;;
+    centos8)
+	NETROOT=$base/centos8-base
+	RECIPE=$base/centos8-base.def
 	;;
     fedora28)
 	NETROOT=$base/fedora28-base
