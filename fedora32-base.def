@@ -1,6 +1,7 @@
 BootStrap: yum
-OSVersion: 30
-MirrorURL: https://ftp-stud.hs-esslingen.de/pub/Mirrors/archive.fedoraproject.org/fedora/linux/releases/%{OSVERSION}/Everything/$basearch/os/
+OSVersion: 32
+
+MirrorURL: http://fedora.mirror.garr.it/fedora/linux/releases/%{OSVERSION}/Everything/$basearch/os/
 #MirrorURL: http://download.fedoraproject.org/pub/fedora/linux/releases/%{OSVERSION}/Everything/$basearch/os/
 #MetaLink: https://mirrors.fedoraproject.org/metalink?repo=fedora-%{OSVERSION}&arch=$basearch
 Include: dnf
