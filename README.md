@@ -43,6 +43,14 @@ tested host systems are CentOS 7 and Fedora 24-32 distros with
 singularity v3+. CentOS 7 is not capable to bootstrap newer Fedora
 versions due to rpm database incompatibility.
 
+For the unlucky users living behind an http proxy, the correct
+environment variable for proxifying the basic system installation is:
+
+``` export http_proxy=http://<user>:<passwd>@<host>:<port>/ ```
+
+If other network installation operations, besides `yum`/`dnf`, are
+performed in the installation recipe, other environment variable
+definitions may be required in order for the proxy to work.
 
 ## Running
 
