@@ -1,8 +1,10 @@
 BootStrap: yum
-OSVersion: 28
-MetaLink: https://mirrors.fedoraproject.org/metalink?repo=fedora-%{OSVERSION}&arch=$basearch
+OSVersion: 30
+MirrorURL: https://ftp-stud.hs-esslingen.de/pub/Mirrors/archive.fedoraproject.org/fedora/linux/releases/%{OSVERSION}/Everything/$basearch/os/
+#MirrorURL: http://download.fedoraproject.org/pub/fedora/linux/releases/%{OSVERSION}/Everything/$basearch/os/
+#MetaLink: https://mirrors.fedoraproject.org/metalink?repo=fedora-%{OSVERSION}&arch=$basearch
 Include: dnf
-UpdateMetaLink: https://mirrors.fedoraproject.org/metalink?repo=updates-released-f%{OSVERSION}&arch=$basearch
+#UpdateMetaLink: https://mirrors.fedoraproject.org/metalink?repo=updates-released-f%{OSVERSION}&arch=$basearch
 
 %runscript
     exec "$@"
@@ -17,7 +19,7 @@ UpdateMetaLink: https://mirrors.fedoraproject.org/metalink?repo=updates-released
 # basic system + booting, @core requires kernel so extra stuff for
 # booting (nbd, nfs, dracut*) must be in the same transaction in order
 # to build a correct initramfs
-dnf install -y @standard @core nfs-utils autofs authconfig \
+dnf install --allowerasing -y @standard @core nfs-utils autofs authconfig \
     nbd kernel kernel-modules kernel-modules-extra \
     dracut-live dracut-network
 
@@ -45,7 +47,7 @@ cat <<EOF > /etc/sysconfig/network
 NETWORKING=yes
 NETWORKING_IPV6=no
 EOF
-cat <<EOF > /etc/hosts
+cat <<EOF > /etc/hosts || true
 127.0.0.1		localhost.localdomain localhost
 ::1		localhost6.localdomain6 localhost6
 EOF
@@ -59,6 +61,4 @@ for serv in network systemd-random-seed mdmonitor firewalld atd auditd \
 done
 # authconfig from kickstart, should we switch to authselect?
 #authconfig --update --nostart --useshadow --passalgo=sha512
-authselect select sssd -f
-
-%end
+authselect select sssd -f || true
