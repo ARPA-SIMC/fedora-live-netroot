@@ -14,8 +14,7 @@ Include: dnf
     rsync -a base/ ${SINGULARITY_ROOTFS}
 
 %post
-# necessary in Fedora?
-    dnf -y install dnf-plugins-core yum-plugin-ovl
+    dnf -y install dnf-plugins-core
 
 # basic system + booting, @core requires kernel so extra stuff for
 # booting (nbd, nfs, dracut*) must be in the same transaction in order

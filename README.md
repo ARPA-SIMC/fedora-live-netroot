@@ -36,12 +36,13 @@ Fedora-live-netroot requires the following packages:
  * nbd, netbsd-iscsi (or iscsi-initiator-utils) for testing transports
    other than nfs.
 
-The system has been tested with CentOS 7, Fedora 28 and Fedora 29 as
-diskless client distributions. Three corresponding basic installation
-recipes are provided for these distributions. The host system had a
-Fedora 24 distro with a custom updated singularity package (v2.5.1),
-it should however work on any host distribution capable of
-bootstrapping a yum/dnf-based filesystem with singularity.
+The system has been tested with CentOS 7, CentOS 8 and Fedora 32 (plus
+older Fedora) as diskless client distributions. Three corresponding
+basic installation recipes are provided for these distributions. The
+tested host systems are CentOS 7 and Fedora 24-32 distros with
+singularity v3+. CentOS 7 is not capable to bootstrap newer Fedora
+versions due to rpm database incompatibility.
+
 
 ## Running
 
@@ -76,7 +77,8 @@ will be:
    created image as root filesystem, this command also takes care of
    exporting the root filesystem by nfs to the virtual system and
    unexporting it at the end (the nfs server must have already been
-   started at this moment, e.g. with `systemctl start nfs.service`):
+   started at this moment, e.g. with `systemctl start
+   nfs-server.service`):
 
 ```
 ./live_netroot startnfs centos7
