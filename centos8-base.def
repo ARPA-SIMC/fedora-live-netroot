@@ -8,13 +8,14 @@ Include: yum
     exec "$@"
 
 %setup
-    rsync -a base/ ${SINGULARITY_ROOTFS}
+    rsync -a base_nonbd/ ${SINGULARITY_ROOTFS}
 
 %post
-    dnf -y install epel-release dnf-plugins-core
-
-# yum-plugin-ovl fixes issue with overlay
-#    yum install -q -y yum-plugin-ovl
+    sed -i '/^tsflags=/d' /etc/dnf/dnf.conf
+    dnf install -y epel-release
+    dnf install -y 'dnf-command(config-manager)'
+    dnf config-manager --set-enabled PowerTools
+#    dnf install -y 'dnf-command(copr)'
 
 # basic system + booting, @core requires kernel so extra stuff for
 # booting (nbd, nfs, dracut*) must be in the same transaction in order

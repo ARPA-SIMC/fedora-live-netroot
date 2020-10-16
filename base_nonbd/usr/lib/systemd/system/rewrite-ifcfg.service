@@ -1,0 +1,11 @@
+[Unit]
+Description=Rewrite ifcfg for netboot
+Wants=network.target
+Before=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for file in /etc/sysconfig/network-scripts/ifcfg-*; do if grep -q "NETBOOT=y.*$" $file; then echo "NM_CONTROLLED=no">>$file; fi;done'
+
+[Install]
+WantedBy=multi-user.target
