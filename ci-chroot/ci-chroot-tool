@@ -1,0 +1,276 @@
+#!/bin/sh
+
+usage() {
+
+    cat <<EOF
+Usage: $0 <command> [options]
+where <command> is one of:
+
+ bootstrap_image <name> <OS name> <size> [<fs type>]
+  bootstrap a minimal OS on a filesystem in a raw file image
+   <name> name of the image file
+   <OS name> name of the distro (centos7, centos8, fedora32 at the
+    moment)
+   <size> size of the image in MB (as understood by dd, e.g. "1K" gives
+    1G image size)
+   <fs type> filesystem type (default ext4)
+
+ bootstrap_dir <name> <OS name>
+  bootstrap a minimal OS on a local directory
+   <name> name of the directory
+   <OS name> name of the distro (centos7, centos8, fedora32 at the
+    moment)
+
+ prepare_image <base> <dest> [-r <size>] [-p]
+  copy a minimal readonly image to a writable file for starting a
+  container instance, optionally resizing it and embedding in a
+  partitioned disk image
+   <base> base raw image file (untouched)
+   <dest> destination image file, if a lot of RAM is available can be
+    on a tmpfs filesystem
+   -r <size> to resize the destination image, with <size> as
+    understood by fsadm/resize2fs, e.g. 640M, 5G (default no resize)
+   -p embed destination image in a single-partition disk image
+    (required by older systemd)
+
+ launch_build <git> <img> <tag>
+  clone a git repository and launch a container instance in the
+  requested OS chroot executing a build in the cloned source tree
+  according to .travis-build.sh script
+   <git> git url of the repository to clone
+   <img> image file or base directory to use as chroot
+   <tag> tag to be passed to the build script 
+EOF
+    exit 1
+}
+ 
+
+
+dnf_or_yum() {
+    if type dnf 2>/dev/null; then
+	export DY=dnf
+    elif type yum 2>/dev/null; then
+	export DY=yum
+    else
+	echo "yum or dnf not found"
+	exit 1
+    fi
+}
+
+bootstrap_centos7() {
+
+# bootstrap with local yum
+    cat > chroot-initial.repo << EOF
+[chroot-base]
+name=Linux \$releasever - \$basearch
+baseurl=http://mirror.centos.org/centos/7/os/\$basearch
+enabled=1
+gpgcheck=0
+EOF
+    $DY -c chroot-initial.repo -y --disablerepo=* \
+	--enablerepo=chroot-base --disableplugin=* \
+	--installroot=$PWD install bash vim-minimal yum rootfiles
+
+    rm -f chroot-initial.repo
+}
+
+bootstrap_centos8() {
+
+# bootstrap with local yum
+    cat > chroot-initial.repo << EOF
+[chroot-base]
+name=Linux \$releasever - \$basearch
+baseurl=http://mirror.centos.org/centos-8/8/BaseOS/\$basearch/os
+enabled=1
+gpgcheck=0
+EOF
+    $DY -c chroot-initial.repo -y --disablerepo=* \
+	--enablerepo=chroot-base --disableplugin=* \
+	--installroot=$PWD install bash vim-minimal dnf rootfiles
+
+    rm -f chroot-initial.repo
+}
+
+bootstrap_fedora32() {
+
+# bootstrap with local yum
+    cat > chroot-initial.repo << EOF
+[chroot-base]
+name=Linux \$releasever - \$basearch
+baseurl=http://download.fedoraproject.org/pub/fedora/linux/releases/32/Everything/\$basearch/os/
+enabled=1
+gpgcheck=0
+EOF
+    $DY -c chroot-initial.repo -y --disablerepo=* \
+	--enablerepo=chroot-base --disableplugin=* \
+	--installroot=$PWD install bash vim-minimal dnf rootfiles
+
+    rm -f chroot-initial.repo
+}
+
+# bootstrap a minimal OS on a local directory
+# $1 name of the directory
+# $2 OS name (centos7, centos8, fedora32)
+bootstrap_dir() {
+
+    RDIR=$1
+    OS=$2
+    if [ -d "$RDIR" ]; then
+	echo "directory $RDIR exists, please remove it first!"
+	exit 1
+    fi
+
+    mkdir $RDIR
+    cd $RDIR
+
+    dnf_or_yum
+    bootstrap_$OS
+# for travis build
+    mkdir -p root/src
+    cd ..
+}
+
+
+bootstrap_image() {
+
+    RFILE=$1
+    OS=$2
+    SIZE=$3
+    FSTYPE=${4:-ext4}
+    RDIR=mnt
+    INDIR=$PWD
+    if [ -f "$RFILE" ]; then
+	echo "file $RFILE exists, please remove it first!"
+	exit 1
+    fi
+
+# cleanup code: trap { set +e; cd $INDIR; umount $RDIR; rmdir $RDIR; rm -f $RFILE } ...
+# create fs
+    dd if=/dev/zero of=$RFILE bs=1M count=$SIZE conv=sparse
+    mkfs -t $FSTYPE $RFILE
+
+# mount fs
+    mkdir $RDIR
+    mount -o loop $RFILE $RDIR
+    cd $RDIR
+
+    dnf_or_yum
+    bootstrap_$OS
+# for travis build
+    mkdir -p root/src
+    cd ..
+
+# unmount fs
+    umount $RDIR
+    rmdir $RDIR
+    echo "raw image $RFILE ready"
+}
+
+
+prepare_image() {
+
+    RFILE=$1
+    RDISK=$2
+    SIZE=
+    PART=
+    shift; shift
+    while [ "$#" -gt 0 ]; do
+	case $1 in
+	    -r)
+		SIZE=$2
+		shift
+		;;
+	    -p)
+		PART=Y
+		;;
+	esac
+	shift
+    done
+
+    if [ -f "$RDISK" ]; then
+	echo "file $RDISK exists, please remove it first!"
+	exit 1
+    fi
+
+    if [ -n "$SIZE" ]; then # resize requested
+# resize a temporary image
+	cp --sparse=always $RFILE $RDISK
+	e2fsck -f $RDISK
+	resize2fs $RDISK $SIZE # try with fsadm resize? xfs must be mounted
+	if [ -n "$PART" ]; then # prepare for partitioning
+	    mv $RDISK $RDISK.tmp
+	    RFILE=$RDISK.tmp
+	fi
+    else
+	if [ ! -n "$PART" ]; then
+	    cp --sparse=always $RFILE $RDISK
+	fi
+	
+    fi
+    
+
+    if [ -n "$PART" ]; then
+# create MBR
+	dd if=/dev/zero of=$RDISK count=1 bs=1M
+# append raw partition to MBR
+	cat $RFILE >> $RDISK
+# partition the disk
+	parted -s $RDISK 'mktable msdos'
+	parted -s $RDISK 'mkpart primary ext2 1049kB -1s'
+	parted -s $RDISK 'set 1 boot on'
+	rm -f $RDISK.tmp
+    fi
+}
+
+
+launch_build() {
+    REPO=$1
+    IMAGE=$2
+    TAG=$3
+
+    git clone $REPO
+    dir=${REPO##*/}
+    dir=${dir%.git}
+    if [ ! -d "$dir" ]; then
+	echo "git clone of $REPO did not create $dir"
+	exit 1
+    fi
+
+    if [ -f "$IMAGE" ]; then # filesystem image
+	systemd-nspawn -i $IMAGE --bind-ro=$PWD/$dir:/root/src sh -c "cd /root/src; sh ./.travis-build.sh $TAG"
+    elif [ -d "$IMAGE" ]; then # local dir
+	systemd-nspawn -D $IMAGE --volatile=overlay --bind-ro=$PWD/$dir:/root/src sh -c "cd /root/src; sh ./.travis-build.sh $TAG"
+    else
+	echo "image $IMAGE does not exist"
+	exit 1
+    fi
+    # save the build result somehow
+}
+
+
+set -e
+set -u
+set -x
+
+if [ "$#" -lt "1" ]; then
+    usage
+fi
+command=$1
+shift
+
+case $command in
+    bootstrap_image)
+	bootstrap_image "$@"
+	;;
+    bootstrap_dir)
+	bootstrap_dir "$@"
+	;;
+    prepare_image)
+	prepare_image "$@"
+	;;
+    launch_build)
+	launch_build "$@"
+	;;
+    *)
+	usage
+esac
