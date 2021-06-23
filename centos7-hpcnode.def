@@ -90,7 +90,7 @@ EOF
     arkimet-postprocess-bufr arkimet-postprocess-json \
     arkimet-postprocess-odimh5filter arkimet-postprocess-seriet \
     arkimet-postprocess-singlepoint arkimet-postprocess-subarea \
-    bufr2json bufr2netcdf fortrangis fortrangis-devel
+    bufr2json bufr2netcdf
 
 
 # now configure the system before first boot, something inherited from

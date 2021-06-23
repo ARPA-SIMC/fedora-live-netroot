@@ -32,6 +32,10 @@ case $label in
 	NETROOT=$base/centos8-base
 	RECIPE=$base/centos8-base.def
 	;;
+    centos8-hpcnode)
+	NETROOT=$base/centos8-hpcnode
+	RECIPE=$base/centos8-hpcnode.def
+	;;
     fedora32) # problems with NetworkManager
 	NETROOT=$base/fedora32-base
 	RECIPE=$base/fedora32-base.def

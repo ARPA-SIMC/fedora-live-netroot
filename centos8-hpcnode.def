@@ -1,0 +1,147 @@
+BootStrap: yum
+OSVersion: 8
+MirrorURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/BaseOS/$basearch/os/
+Include: yum
+#UpdateURL: http://mirror.centos.org/centos-%{OSVERSION}/%{OSVERSION}/updates/$basearch/
+
+%runscript
+    exec "$@"
+
+%setup
+    rsync -a base_nonbd/ ${SINGULARITY_ROOTFS}
+
+%post
+    sed -i '/^tsflags=/d' /etc/dnf/dnf.conf
+    dnf install -y epel-release
+    dnf install -y 'dnf-command(config-manager)'
+    dnf config-manager --set-enabled powertools appstream
+
+# basic system + booting, @core requires kernel so extra stuff for
+# booting (nbd, nfs, dracut*) must be in the same transaction in order
+# to build a correct initramfs
+# allowerasing apparently needed for @core (curl), hopefully temporary
+# nbd not found for the moment
+    dnf install --allowerasing -y @standard @core nfs-utils autofs authconfig \
+    kernel kernel-modules kernel-modules-extra \
+    dracut-live dracut-network
+
+# admin, debug
+    dnf install -y ipmitool iscsi-initiator-utils perf \
+    dmidecode freeipmi \
+    ganglia ganglia-gmond ganglia-gmetad
+
+# hpc applications and libraries
+    dnf install -y libgfortran openmpi hdf5-openmpi netcdf-openmpi \
+    netcdf-fortran-openmpi hdf5 netcdf netcdf-fortran
+
+# scheduling of hpc applications
+    dnf install -y torque torque-libs munge
+    dnf install -y slurm slurm-slurmd slurm-slurmctld slurm-slurmdbd \
+    slurm-pam_slurm
+# slurm-example-configs
+#    mkdir /var/spool/slurm
+
+# for infiniband
+    dnf install -y rdma libcxgb4 libmlx4 libmlx5 \
+    libibverbs libibverbs-utils infiniband-diags \
+    perftest qperf librdmacm-utils
+
+# for glusterfs
+    dnf install -y glusterfs glusterfs-rdma \
+    glusterfs-cli glusterfs-fuse
+
+# hpc applications and libraries
+    dnf install -y atlas atlas-devel blas blas-devel lapack lapack-devel \
+    fftw-libs-double fftw-libs-single  \
+    git git-core git-core-doc git-svn \
+    grib_api-devel gsl gsl-devel ImageMagick ImageMagick-c++ \
+    ImageMagick-libs GraphicsMagick openmpi \
+    hdf hdf5-devel hdf5-openmpi hdf5-openmpi-devel ksh \
+    ncl ncl-common ncl-devel \
+    nco netcdf-cxx netcdf-cxx-devel netcdf-cxx4-openmpi netcdf-cxx4-openmpi-devel \
+    netcdf-devel netcdf-fortran-devel netcdf-fortran-openmpi \
+    netcdf-fortran-openmpi-devel netcdf-openmpi-devel openmpi-devel \
+    plplot plplot-data plplot-devel plplot-doc plplot-fortran-devel plplot-libs \
+    proj proj-devel R R-core R-core-devel \
+    R-devel strace subversion udunits2 \
+    valgrind vim-common vim-enhanced \
+    vim-filesystem wgrib wgrib2 shapelib shapelib-devel shapelib-tools \
+    octave
+
+    dnf copr enable -y simc/stable
+    dnf install -y arkimet dballe dballe-common fortrangis \
+    fortrangis-devel libsim libsim-devel libwreport3 \
+    libwreport-common libwreport-devel meteosatlib meteosatlib-gdal \
+    meteosatlib-tools meteo-vm2 meteo-vm2-utils meteo-vm2-devel \
+    radarcoordlib radarlib radarlib-devel \
+    verifica wreport arkimet-devel \
+    bufr2json bufr2netcdf
+
+# generate once for all ssh host keys, sshd-keygen does not work in chroot
+/usr/libexec/openssh/sshd-keygen rsa
+/usr/libexec/openssh/sshd-keygen ecdsa
+/usr/libexec/openssh/sshd-keygen ed25519
+# use systemd-firstboot where possible, root passwd ignored here
+systemd-firstboot --locale=en_US.UTF-8 --timezone=UTC
+# configure keyboard
+cat <<EOF > /etc/vconsole.conf
+KEYMAP="us"
+FONT="eurlatgr"
+EOF
+# configure root password
+echo ciao | /usr/bin/passwd --stdin root
+# disable selinux
+sed -i -e 's/^SELINUX=.*$/SELINUX=disabled/g' /etc/selinux/config
+# configure network
+cat <<EOF > /etc/sysconfig/network
+NETWORKING=yes
+NETWORKING_IPV6=no
+EOF
+cat <<EOF > /etc/hosts || true
+127.0.0.1		localhost.localdomain localhost
+::1		localhost6.localdomain6 localhost6
+EOF
+# change default services, allow failure due to missing units
+for serv in rewrite-ifcfg autofs NetworkManager dbus-daemon rdma; do
+    systemctl enable $serv || true
+done
+for serv in network systemd-random-seed mdmonitor firewalld atd auditd \
+  abrtd abrt-xorg abrt-vmcore abrt-journal-core abrt-oops kdump; do
+    systemctl disable $serv || true
+done
+# authconfig from kickstart, should we switch to authselect?
+#authconfig --update --nostart --useshadow --passalgo=sha512
+authselect select sssd -f || true
+# fix to ssh server required for remotely launching parallel processes
+# that make use of Infiniband (analog of ulimit -l unlimited)
+mkdir -p /etc/systemd/system/sshd.service.d
+cat  <<EOF > /etc/systemd/system/sshd.service.d/memlock.conf
+[Service]
+LimitMEMLOCK=infinity
+EOF
+# tune network for nfs over ib
+cat <<EOF > /etc/sysctl.d/90-ibtuning.conf
+# allow testing with buffers up to 64MB
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+# increase Linux autotuning TCP buffer limit to 32MB
+net.ipv4.tcp_rmem = 4096 87380 33554432
+net.ipv4.tcp_wmem = 4096 65536 33554432
+# recommended default congestion control is htcp
+#net.ipv4.tcp_congestion_control=htcp
+# recommended for hosts with jumbo frames enabled
+net.ipv4.tcp_mtu_probing=1
+# recommended for CentOS7/Debian8 hosts
+net.core.default_qdisc = fq
+EOF
+# configure munge key
+cp -p /tmpstorage/munge.key /etc/munge/munge.key
+chown munge.munge /etc/munge/munge.key
+# configure openmpi
+cp -p /tmpstorage/openmpi-mca-params.conf /etc/openmpi-x86_64/openmpi-mca-params.conf
+rm -rf /tmpstorage
+# add users
+# add /fs tree
+# slurm
+systemctl enable munge
+systemctl enable slurmd

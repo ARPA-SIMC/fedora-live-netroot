@@ -14,8 +14,7 @@ Include: yum
     sed -i '/^tsflags=/d' /etc/dnf/dnf.conf
     dnf install -y epel-release
     dnf install -y 'dnf-command(config-manager)'
-    dnf config-manager --set-enabled PowerTools
-#    dnf install -y 'dnf-command(copr)'
+    dnf config-manager --set-enabled powertools
 
 # basic system + booting, @core requires kernel so extra stuff for
 # booting (nbd, nfs, dracut*) must be in the same transaction in order
