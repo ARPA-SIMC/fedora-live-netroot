@@ -9,6 +9,8 @@ Include: yum
 
 %setup
     rsync -a base_nonbd/ ${SINGULARITY_ROOTFS}
+    mkdir ${SINGULARITY_ROOTFS}/tmpstorage
+    cp -p /etc/hosts /etc/ssh/ssh_host_* /etc/openmpi-x86_64/openmpi-mca-params.conf /etc/munge/munge.key ${SINGULARITY_ROOTFS}/tmpstorage || true
 
 %post
     sed -i '/^tsflags=/d' /etc/dnf/dnf.conf
@@ -21,9 +23,11 @@ Include: yum
 # to build a correct initramfs
 # allowerasing apparently needed for @core (curl), hopefully temporary
 # nbd not found for the moment
+# glibc-langpack-en required for successive systemd-firstboot --locale=en_US.UTF-8
+# environment-modules not atumoatically installed by mpi & c.
     dnf install --allowerasing -y @standard @core nfs-utils autofs authconfig \
     kernel kernel-modules kernel-modules-extra \
-    dracut-live dracut-network
+    dracut-live dracut-network glibc-langpack-en environment-modules
 
 # admin, debug
     dnf install -y ipmitool iscsi-initiator-utils perf \
@@ -138,7 +142,7 @@ EOF
 cp -p /tmpstorage/munge.key /etc/munge/munge.key
 chown munge.munge /etc/munge/munge.key
 # configure openmpi
-cp -p /tmpstorage/openmpi-mca-params.conf /etc/openmpi-x86_64/openmpi-mca-params.conf
+#cp -p /tmpstorage/openmpi-mca-params.conf /etc/openmpi-x86_64/openmpi-mca-params.conf
 rm -rf /tmpstorage
 # add users
 # add /fs tree
