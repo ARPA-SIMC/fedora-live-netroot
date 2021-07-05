@@ -141,8 +141,15 @@ EOF
 # configure munge key
 cp -p /tmpstorage/munge.key /etc/munge/munge.key
 chown munge.munge /etc/munge/munge.key
-# configure openmpi
-#cp -p /tmpstorage/openmpi-mca-params.conf /etc/openmpi-x86_64/openmpi-mca-params.conf
+# configure openmpi4 to avoid warning message
+echo 'btl = ^openib' >> /etc/openmpi-x86_64/openmpi-mca-params.conf
+# activate dhcp on ib interface
+cat << EOF > /etc/sysconfig/network-scripts/ifcfg-ib0
+NAME=ib0
+ONBOOT=yes
+BOOTPROTO=dhcp
+TYPE=Infiniband
+EOF
 rm -rf /tmpstorage
 # add users
 # add /fs tree
