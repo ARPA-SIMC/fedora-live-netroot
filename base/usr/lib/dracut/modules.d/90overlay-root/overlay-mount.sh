@@ -41,5 +41,10 @@ rootovlcfg=$(getargs rootovlcfg)
 if [ -n "$rootovlcfg" ]; then
     if [ -d $NEWROOT/etc/rootovl/$rootovlcfg ]; then
 	cp -a $NEWROOT/etc/rootovl/$rootovlcfg/* $NEWROOT
+	if [ -f $NEWROOT/etc/rootovl/$rootovlcfg/.rootovldel ]; then
+	    while read del; do
+		rm -f $NEWROOT$del
+	    done < $NEWROOT/etc/rootovl/$rootovlcfg/.rootovldel
+	fi
     fi
 fi
