@@ -167,13 +167,20 @@ This is done in the following way:
 
 1. in the base root fs create a directory `etc/rootovl/<config-name>`
    and populate it with the files that need to be added or modified,
-   starting from the root of the filesystem, so, for changing
-   `/etc/sysconfig/network-scripts/ifcfg-ens20f0` you need to create
-   the file
+   starting from the root of the filesystem, so, for creating or
+   changing `/etc/sysconfig/network-scripts/ifcfg-ens20f0` you need to
+   create the file
    `etc/rootovl/<config-name>/etc/sysconfig/network-scripts/ifcfg-ens20f0`
-   in the root tree
+   in the root tree; the tree is copied with `cp -a`, so symbolic
+   links are copied without modification, this is useful, e.g., for
+   creating systemd symbolic links in `/etc/systemd` referring to
+   services to be enabled
 
-2. start the diskless system adding the `rootovlcfg=<config-name>`
+2. if any file of the base root fs tree has to be deleted in the
+   running system, list these files one per line, with their final
+   absolute path, in `etc/rootovl/<config-name>/.rootovldel`
+
+3. start the diskless system adding the `rootovlcfg=<config-name>`
    kernel command-line argument (this can be done with the
    `EXTRA_CMDLINE` environment variable in the qemu test environment).
 
@@ -181,9 +188,7 @@ If everything works, the root filesystem at pivot-root time will
 contain the requested modifications, which will reside in the memory
 overlay, while diskless systems started without `rootovlcfg` argument
 will see the unmodified root filesystem. Any number of different
-configuration trees can be created in the `etc/rootovl` directory. It
-is not however possible to erase a file as for a specific host
-configuration.
+configuration trees can be created in the `etc/rootovl` directory.
 
 ### Deploying on a real environment
 
