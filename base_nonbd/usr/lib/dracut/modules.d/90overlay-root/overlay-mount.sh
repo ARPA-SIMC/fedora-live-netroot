@@ -36,9 +36,10 @@ umount /cow
 mount --bind /live/image $NEWROOT/live/image
 umount /live/image
 
-# Update filesystem with custom configuration
-rootovlcfg=$(getargs rootovlcfg)
-if [ -n "$rootovlcfg" ]; then
+# Update filesystem with custom configurations, parse as comma-separated list
+rootovlcfgs=$(getargs rootovlcfg)
+while [ -n "$rootovlcfgs" ]; do
+    rootovlcfg=${rootovlcfgs##*,}
     if [ -d $NEWROOT/etc/rootovl/$rootovlcfg ]; then
 	cp -a $NEWROOT/etc/rootovl/$rootovlcfg/* $NEWROOT
 	if [ -f $NEWROOT/etc/rootovl/$rootovlcfg/.rootovldel ]; then
@@ -47,4 +48,8 @@ if [ -n "$rootovlcfg" ]; then
 	    done < $NEWROOT/etc/rootovl/$rootovlcfg/.rootovldel
 	fi
     fi
-fi
+    if [ "$rootovlcfgs" = "$rootovlcfg" ]; then
+        break
+    fi
+    rootovlcfgs=${rootovlcfgs%,$rootovlcfg}
+done
