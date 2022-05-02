@@ -41,7 +41,8 @@ rootovlcfgs=$(getargs rootovlcfg)
 while [ -n "$rootovlcfgs" ]; do
     rootovlcfg=${rootovlcfgs##*,}
     if [ -d $NEWROOT/etc/rootovl/$rootovlcfg ]; then
-	cp -a $NEWROOT/etc/rootovl/$rootovlcfg/* $NEWROOT
+# following cp -a may fail if there is only .rootovldel
+	cp -a $NEWROOT/etc/rootovl/$rootovlcfg/* $NEWROOT || true
 	if [ -f $NEWROOT/etc/rootovl/$rootovlcfg/.rootovldel ]; then
 	    while read del; do
 		rm -f $NEWROOT$del
