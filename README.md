@@ -188,7 +188,10 @@ If everything works, the root filesystem at pivot-root time will
 contain the requested modifications, which will reside in the memory
 overlay, while diskless systems started without `rootovlcfg` argument
 will see the unmodified root filesystem. Any number of different
-configuration trees can be created in the `etc/rootovl` directory.
+configuration trees can be created in the `etc/rootovl` directory. On
+the kernel command line it is possible to specify more than one
+comma-separated configuration directory tree, to be applied in reverse
+order.
 
 ### Deploying on a real environment
 
